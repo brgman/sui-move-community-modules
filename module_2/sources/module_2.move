@@ -1,12 +1,12 @@
 module module_2::hero {
     use std::string::String;
     
-    public struct Hero has key, store {
+     public struct Hero has key, store {
         // TODO: Add the fields for the Hero
         // 1. The id of the Hero
         // 2. The name of the Hero
-        // 3. The power of the Hero
-        // 4. The imageurl of the Hero
+        // 3. The imageurl of the Hero
+        // 4. The power of the Hero
     }
 
     #[allow(lint(self_transfer))]
