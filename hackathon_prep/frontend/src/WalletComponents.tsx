@@ -88,7 +88,28 @@ export const WalletInfo: React.FC = () => {
 export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
     const currentAccount = useCurrentAccount();
     const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+    const suiClient = useSuiClient();
     const [loading, setLoading] = useState(false);
+
+    // Состояние для уведомлений
+    const [notification, setNotification] = useState<{
+        message: string;
+        type: 'success' | 'error';
+        show: boolean;
+    }>({ message: '', type: 'success', show: false });
+
+    // Состояние для созданных NFT
+    const [createdNFTs, setCreatedNFTs] = useState<Array<{
+        name: string;
+        description: string;
+        imageUrl: string;
+        level: number;
+        power: number;
+        rarity: number;
+        transactionDigest: string;
+        objectId?: string;
+        createdAt: number;
+    }>>([]);
 
     // Параметры NFT
     const [nftParams, setNftParams] = useState({
@@ -100,9 +121,17 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
         rarity: 4
     });
 
+    // Функция для показа уведомлений
+    const showNotification = (message: string, type: 'success' | 'error') => {
+        setNotification({ message, type, show: true });
+        setTimeout(() => {
+            setNotification(prev => ({ ...prev, show: false }));
+        }, 5000); // Скрываем через 5 секунд
+    };
+
     const mintNFT = async () => {
         if (!currentAccount) {
-            alert('❌ Сначала подключите браузерный кошелек Sui Wallet!');
+            showNotification('❌ Сначала подключите браузерный кошелек Sui Wallet!', 'error');
             return;
         }
 
@@ -111,13 +140,13 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
 
         // Проверка что Package ID установлен
         if (!packageId) {
-            alert(`❌ Package ID не установлен!\n\nДля создания NFT нужно:\n\n1. Подключить браузерный кошелек Sui Wallet\n2. Развернуть basic_nft контракт через CLI\n3. Ввести реальный Package ID в секции выше\n\nБез реального Package ID создание NFT невозможно!`);
+            showNotification('❌ Package ID не установлен! Сначала разверните контракт выше.', 'error');
             return;
         }
 
         // Проверка корректности rarity
         if (nftParams.rarity < 1 || nftParams.rarity > 4) {
-            alert('❌ Редкость должна быть от 1 до 4');
+            showNotification('❌ Редкость должна быть от 1 до 4', 'error');
             return;
         }
 
@@ -146,9 +175,54 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
             signAndExecute(
                 { transaction: tx },
                 {
-                    onSuccess: (result) => {
+                    onSuccess: async (result) => {
                         console.log('✅ NFT успешно создан!', result);
-                        alert(`🎉 NFT "${nftParams.name}" успешно создан!\n\n📋 Transaction: ${result.digest}\n\nПроверьте ваш кошелек - NFT должен появиться там.`);
+
+                        // Пытаемся получить Object ID созданного NFT
+                        let objectId: string | null = null;
+                        try {
+                            // Ждем несколько секунд чтобы транзакция была обработана
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+
+                            const txDetails = await suiClient.getTransactionBlock({
+                                digest: result.digest,
+                                options: {
+                                    showEffects: true,
+                                    showObjectChanges: true,
+                                }
+                            });
+
+                            // Ищем созданный NFT объект
+                            if (txDetails.effects?.created) {
+                                for (const created of txDetails.effects.created) {
+                                    // Находим immutable object (это скорее всего наш NFT)
+                                    const objId = created.reference.objectId;
+                                    if (objId && objId !== packageId) {
+                                        objectId = objId;
+                                        console.log('✅ Найден Object ID NFT:', objectId);
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ Не удалось получить Object ID NFT:', error);
+                        }
+
+                        // Добавляем созданный NFT в список
+                        const newNFT = {
+                            ...nftParams,
+                            transactionDigest: result.digest,
+                            objectId: objectId || undefined,
+                            createdAt: Date.now()
+                        };
+
+                        setCreatedNFTs(prev => [newNFT, ...prev]); // Добавляем в начало списка
+
+                        // Показываем уведомление об успехе
+                        showNotification(
+                            `🎉 NFT "${nftParams.name}" успешно создан! ${objectId ? 'Object ID получен.' : 'Ссылки доступны ниже.'}`,
+                            'success'
+                        );
 
                         // Сбрасываем форму
                         setNftParams({
@@ -175,14 +249,14 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
                             errorMessage = error.message;
                         }
 
-                        alert(`❌ Ошибка: ${errorMessage}\n\nДетали в консоли браузера (F12)`);
+                        showNotification(`❌ ${errorMessage}`, 'error');
                     }
                 }
             );
 
         } catch (error) {
             console.error('❌ Ошибка при подготовке транзакции:', error);
-            alert('❌ Ошибка при подготовке транзакции. Проверьте консоль браузера (F12).');
+            showNotification('❌ Ошибка при подготовке транзакции. Проверьте консоль браузера (F12).', 'error');
         } finally {
             setLoading(false);
         }
@@ -199,6 +273,34 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
     return (
         <div className="nft-minter">
             <h3>🎨 Создать Game NFT</h3>
+
+            {/* Уведомление */}
+            {notification.show && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: '20px',
+                        right: '20px',
+                        padding: '15px 20px',
+                        borderRadius: '8px',
+                        color: 'white',
+                        backgroundColor: notification.type === 'success' ? '#28a745' : '#dc3545',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        zIndex: 1000,
+                        maxWidth: '400px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}
+                    onClick={() => setNotification(prev => ({ ...prev, show: false }))}
+                >
+                    <span>{notification.message}</span>
+                    <span style={{ marginLeft: '10px', fontSize: '16px' }}>×</span>
+                </div>
+            )}
 
             {/* Индикатор Package ID */}
             <div style={{
@@ -316,6 +418,147 @@ export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
             >
                 {loading ? '⏳ Создание...' : '🎨 Создать NFT'}
             </button>
+
+            {/* Секция отображения созданных NFT */}
+            {createdNFTs.length > 0 && (
+                <div style={{ marginTop: '30px' }}>
+                    <h3>🎉 Созданные NFT</h3>
+                    <div style={{
+                        display: 'grid',
+                        gap: '20px',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                        marginTop: '15px'
+                    }}>
+                        {createdNFTs.map((nft, index) => {
+                            const rarityName = ['', 'Common', 'Rare', 'Epic', 'Legendary'][nft.rarity];
+                            const rarityColor = ['', '#6c757d', '#28a745', '#7b1fa2', '#ff6f00'][nft.rarity];
+
+                            return (
+                                <div
+                                    key={index}
+                                    style={{
+                                        padding: '20px',
+                                        border: '2px solid #e9ecef',
+                                        borderRadius: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}
+                                >
+                                    <div style={{ marginBottom: '15px' }}>
+                                        <h4 style={{ margin: '0 0 8px 0', color: '#212529' }}>
+                                            {nft.name}
+                                        </h4>
+                                        <p style={{
+                                            margin: '0 0 8px 0',
+                                            color: '#6c757d',
+                                            fontSize: '14px',
+                                            lineHeight: '1.4'
+                                        }}>
+                                            {nft.description}
+                                        </p>
+                                        <span style={{
+                                            background: rarityColor,
+                                            color: 'white',
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '12px',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            {rarityName}
+                                        </span>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1fr 1fr',
+                                        gap: '10px',
+                                        marginBottom: '15px',
+                                        fontSize: '14px'
+                                    }}>
+                                        <div>⚡ Уровень: <strong>{nft.level}</strong></div>
+                                        <div>💪 Сила: <strong>{nft.power}</strong></div>
+                                    </div>
+
+                                    {nft.imageUrl && nft.imageUrl !== 'https://example.com/hero.png' && (
+                                        <div style={{ marginBottom: '15px' }}>
+                                            <img
+                                                src={nft.imageUrl}
+                                                alt={nft.name}
+                                                style={{
+                                                    width: '100%',
+                                                    maxHeight: '150px',
+                                                    objectFit: 'cover',
+                                                    borderRadius: '8px'
+                                                }}
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '10px' }}>
+                                        Создан: {new Date(nft.createdAt).toLocaleString('ru-RU')}
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <a
+                                            href={`https://suiscan.xyz/testnet/tx/${nft.transactionDigest}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                padding: '8px 12px',
+                                                backgroundColor: '#007bff',
+                                                color: 'white',
+                                                textDecoration: 'none',
+                                                borderRadius: '4px',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            🔗 Транзакция
+                                        </a>
+                                        {nft.objectId && (
+                                            <a
+                                                href={`https://suiscan.xyz/testnet/object/${nft.objectId}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    padding: '8px 12px',
+                                                    backgroundColor: '#17a2b8',
+                                                    color: 'white',
+                                                    textDecoration: 'none',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                🎨 NFT Объект
+                                            </a>
+                                        )}
+                                        <a
+                                            href={`https://suiscan.xyz/testnet/account/${currentAccount?.address}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                padding: '8px 12px',
+                                                backgroundColor: '#28a745',
+                                                color: 'white',
+                                                textDecoration: 'none',
+                                                borderRadius: '4px',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            👛 Кошелек
+                                        </a>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

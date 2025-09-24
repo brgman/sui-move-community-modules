@@ -30,7 +30,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         setDeployedPackageId(trimmedId);
         onPackageDeployed?.(trimmedId);
         setError('');
-        
+
         console.log('✅ Package ID установлен:', trimmedId);
     };
 
@@ -46,10 +46,10 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
     // Функция для повторного извлечения Package ID из известной транзакции
     const retryExtractPackageId = async () => {
         if (!lastTransactionDigest) return;
-        
+
         setIsDeploying(true);
         const packageId = await extractPackageIdFromTransaction(lastTransactionDigest);
-        
+
         if (packageId) {
             setDeployedPackageId(packageId);
             setPackageIdInput(packageId);
@@ -59,7 +59,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         } else {
             setError('❌ Все еще не удается извлечь Package ID. Попробуйте ввести его вручную.');
         }
-        
+
         setIsDeploying(false);
     };
 
@@ -67,10 +67,10 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
     const extractPackageIdFromTransaction = async (digest: string): Promise<string | null> => {
         try {
             setDeployStatus('🔍 Извлекаем Package ID из транзакции...');
-            
+
             // Добавляем небольшую задержку для обеспечения финализации транзакции
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             // Получаем детали транзакции
             const txDetails = await suiClient.getTransactionBlock({
                 digest: digest,
@@ -159,15 +159,15 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     owner: currentAccount.address,
                     coinType: '0x2::sui::SUI'
                 });
-                
+
                 const balanceInSui = parseInt(balance.totalBalance) / 1000000000;
                 console.log(`💰 Баланс пользователя: ${balanceInSui} SUI`);
                 setUserBalance(`${balanceInSui.toFixed(4)} SUI`);
-                
+
                 if (parseInt(balance.totalBalance) < 50000000) { // Меньше 0.05 SUI
                     throw new Error(`Недостаточно SUI для деплоя. Текущий баланс: ${balanceInSui.toFixed(4)} SUI. Требуется минимум 0.05 SUI. Получите токены на https://faucet.sui.io`);
                 }
-                
+
                 setDeployStatus(`✅ Баланс достаточен: ${balanceInSui.toFixed(4)} SUI`);
             } catch (balanceError: any) {
                 if (balanceError.message.includes('Недостаточно SUI')) {
@@ -182,7 +182,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
             if (!response.ok) {
                 throw new Error('Не удалось загрузить байткод контракта. Убедитесь что файл /bytecode/basic_nft.mv доступен.');
             }
-            
+
             const bytecodeBuffer = await response.arrayBuffer();
             const bytecode = Array.from(new Uint8Array(bytecodeBuffer));
 
@@ -190,10 +190,10 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
 
             // Создаем транзакцию для публикации
             const tx = new Transaction();
-            
+
             // Устанавливаем разумный газ бюджет для деплоя (0.05 SUI)
             tx.setGasBudget(50000000); // 0.05 SUI - достаточно для публикации
-            
+
             // Публикуем пакет с явными зависимостями для Sui testnet
             const [upgradeCapability] = tx.publish({
                 modules: [bytecode],
@@ -218,15 +218,15 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                 {
                     onSuccess: async (result) => {
                         console.log('✅ Контракт успешно задеплоен из браузера!', result);
-                        
+
                         if (result.digest) {
                             console.log('📋 Transaction Digest:', result.digest);
                             setLastTransactionDigest(result.digest);
                             setDeployStatus('🎉 Деплой завершен! Получаем Package ID...');
-                            
+
                             // Автоматически извлекаем Package ID
                             const packageId = await extractPackageIdFromTransaction(result.digest);
-                            
+
                             if (packageId) {
                                 // Успешно получили Package ID - заполняем интерфейс
                                 setDeployedPackageId(packageId);
@@ -235,7 +235,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 setDeployStatus(`✅ Package ID получен и установлен автоматически!`);
                                 setError('');
                                 setShowDeployOption(false);
-                                
+
                                 console.log('🎯 Package ID автоматически установлен:', packageId);
                             } else {
                                 // Не удалось автоматически получить Package ID
@@ -243,7 +243,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 setError(`⚠️ Контракт задеплоен успешно, но не удалось автоматически извлечь Package ID. Проверьте транзакцию в explorer и введите Package ID вручную: ${explorerUrl}`);
                                 setDeployStatus('⚠️ Требуется ручной ввод Package ID');
                                 setShowDeployOption(false);
-                                
+
                                 console.log('🔗 Explorer URL:', explorerUrl);
                             }
                         } else {
@@ -251,13 +251,13 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             setError('Контракт задеплоен, но не получен digest транзакции');
                             setDeployStatus('❌ Нет digest транзакции');
                         }
-                        
+
                         setIsDeploying(false);
                     },
                     onError: (error) => {
                         console.error('❌ Ошибка деплоя:', error);
                         let errorMessage = error.message;
-                        
+
                         if (errorMessage.includes('PublishUpgradeMissingDependency')) {
                             errorMessage = 'Ошибка зависимостей контракта. Попробуйте перезагрузить страницу и повторить деплой.';
                         } else if (errorMessage.includes('InsufficientGas')) {
@@ -265,7 +265,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         } else if (errorMessage.includes('UserRejected')) {
                             errorMessage = 'Транзакция отклонена пользователем';
                         }
-                        
+
                         setError(`Ошибка деплоя: ${errorMessage}`);
                         setDeployStatus('❌ Деплой не удался');
                         setIsDeploying(false);
@@ -293,11 +293,11 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
     return (
         <div style={{ padding: '25px', backgroundColor: '#fff', border: '2px solid #007bff', borderRadius: '10px', marginBottom: '20px' }}>
             <h3 style={{ color: '#007bff', marginBottom: '20px' }}>📦 Подключение к Smart Contract</h3>
-            
+
             {!deployedPackageId ? (
                 <div>
                     <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                        <button 
+                        <button
                             onClick={() => setShowDeployOption(!showDeployOption)}
                             style={{
                                 padding: '12px 24px',
@@ -316,11 +316,11 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
 
                     {/* Отображение статуса деплоя */}
                     {deployStatus && (
-                        <div style={{ 
-                            marginBottom: '20px', 
-                            padding: '15px', 
-                            backgroundColor: '#e3f2fd', 
-                            borderRadius: '8px', 
+                        <div style={{
+                            marginBottom: '20px',
+                            padding: '15px',
+                            backgroundColor: '#e3f2fd',
+                            borderRadius: '8px',
                             border: '1px solid #bbdefb',
                             textAlign: 'center'
                         }}>
@@ -334,7 +334,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         <div style={{ marginBottom: '20px', padding: '20px', backgroundColor: '#e8f4fd', borderRadius: '8px', border: '2px solid #007bff' }}>
                             <h4 style={{ color: '#007bff', marginTop: 0 }}>🚀 Деплой контракта через браузер</h4>
                             <p>Задеплойте basic_nft контракт прямо из браузера используя ваш подключенный кошелек.</p>
-                            
+
                             <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#d1ecf1', borderRadius: '6px', border: '1px solid #bee5eb' }}>
                                 <p style={{ margin: 0, fontSize: '14px', color: '#0c5460' }}>
                                     <strong>ℹ️ Как это работает:</strong>
@@ -359,7 +359,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 </ul>
                             </div>
 
-                            <button 
+                            <button
                                 onClick={deployContractFromBrowser}
                                 disabled={isDeploying}
                                 style={{
@@ -412,7 +412,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             </div>
 
                             <div style={{ display: 'flex', gap: '10px' }}>
-                                <button 
+                                <button
                                     onClick={validateAndSetPackageId}
                                     disabled={!packageIdInput.trim()}
                                     style={{
@@ -431,7 +431,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                     ✅ Подключить контракт
                                 </button>
                             </div>
-                            
+
                             <div style={{ marginTop: '15px', fontSize: '14px', color: '#6c757d' }}>
                                 <p>💡 Введите реальный Package ID развернутого basic_nft контракта</p>
                             </div>
@@ -439,16 +439,16 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     )}
 
                     {error && (
-                        <div style={{ 
-                            backgroundColor: '#ffebee', 
-                            color: '#c62828', 
-                            padding: '15px', 
+                        <div style={{
+                            backgroundColor: '#ffebee',
+                            color: '#c62828',
+                            padding: '15px',
                             borderRadius: '8px',
                             margin: '20px 0',
                             border: '1px solid #f8bbd9'
                         }}>
                             <p style={{ margin: 0 }}>❌ {error}</p>
-                            
+
                             {lastTransactionDigest && (
                                 <div style={{ marginTop: '15px' }}>
                                     <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
@@ -470,7 +470,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                         >
                                             {isDeploying ? '🔄 Извлекаем...' : '🔄 Повторить извлечение Package ID'}
                                         </button>
-                                        
+
                                         <a
                                             href={`https://suiscan.xyz/testnet/tx/${lastTransactionDigest}`}
                                             target="_blank"
@@ -498,7 +498,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     <h4 style={{ color: '#155724', marginTop: 0 }}>✅ Контракт подключен!</h4>
                     <div style={{ marginBottom: '15px' }}>
                         <strong>📦 Package ID:</strong>
-                        <code style={{ 
+                        <code style={{
                             display: 'block',
                             backgroundColor: '#fff',
                             padding: '12px',
@@ -511,11 +511,11 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             color: '#155724'
                         }}>{deployedPackageId}</code>
                     </div>
-                    
+
                     {deployStatus && (
-                        <div style={{ 
-                            backgroundColor: '#fff', 
-                            padding: '10px', 
+                        <div style={{
+                            backgroundColor: '#fff',
+                            padding: '10px',
                             borderRadius: '6px',
                             margin: '10px 0',
                             border: '1px solid #28a745'
@@ -525,9 +525,9 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             </p>
                         </div>
                     )}
-                    
+
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button 
+                        <button
                             onClick={clearPackageId}
                             style={{
                                 padding: '8px 16px',
