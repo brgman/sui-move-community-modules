@@ -13,6 +13,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
     const [showDeployOption, setShowDeployOption] = useState(false);
     const [deployStatus, setDeployStatus] = useState<string>('');
     const [lastTransactionDigest, setLastTransactionDigest] = useState<string>('');
+    const [userBalance, setUserBalance] = useState<string>('');
 
     const validateAndSetPackageId = () => {
         if (!packageIdInput.trim()) {
@@ -38,6 +39,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         setPackageIdInput('');
         setDeployStatus('');
         setLastTransactionDigest('');
+        setUserBalance('');
         onPackageDeployed?.('');
     };
 
@@ -150,6 +152,31 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
 
             console.log('🚀 Начинаем деплой контракта из браузера...');
 
+            // Проверяем баланс пользователя
+            setDeployStatus('💰 Проверяем баланс...');
+            try {
+                const balance = await suiClient.getBalance({
+                    owner: currentAccount.address,
+                    coinType: '0x2::sui::SUI'
+                });
+                
+                const balanceInSui = parseInt(balance.totalBalance) / 1000000000;
+                console.log(`💰 Баланс пользователя: ${balanceInSui} SUI`);
+                setUserBalance(`${balanceInSui.toFixed(4)} SUI`);
+                
+                if (parseInt(balance.totalBalance) < 50000000) { // Меньше 0.05 SUI
+                    throw new Error(`Недостаточно SUI для деплоя. Текущий баланс: ${balanceInSui.toFixed(4)} SUI. Требуется минимум 0.05 SUI. Получите токены на https://faucet.sui.io`);
+                }
+                
+                setDeployStatus(`✅ Баланс достаточен: ${balanceInSui.toFixed(4)} SUI`);
+            } catch (balanceError: any) {
+                if (balanceError.message.includes('Недостаточно SUI')) {
+                    throw balanceError;
+                }
+                console.warn('⚠️ Не удалось проверить баланс:', balanceError);
+                setDeployStatus('⚠️ Не удалось проверить баланс, продолжаем...');
+            }
+
             // Получаем скомпилированный байткод
             const response = await fetch('/bytecode/basic_nft.mv');
             if (!response.ok) {
@@ -164,8 +191,8 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
             // Создаем транзакцию для публикации
             const tx = new Transaction();
             
-            // Устанавливаем разумный газ бюджет (0.01 SUI)
-            tx.setGasBudget(10000000); // 0.01 SUI
+            // Устанавливаем разумный газ бюджет для деплоя (0.05 SUI)
+            tx.setGasBudget(50000000); // 0.05 SUI - достаточно для публикации
             
             // Публикуем пакет с явными зависимостями для Sui testnet
             const [upgradeCapability] = tx.publish({
@@ -234,7 +261,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         if (errorMessage.includes('PublishUpgradeMissingDependency')) {
                             errorMessage = 'Ошибка зависимостей контракта. Попробуйте перезагрузить страницу и повторить деплой.';
                         } else if (errorMessage.includes('InsufficientGas')) {
-                            errorMessage = 'Недостаточно SUI для оплаты газа (~0.01 SUI). Получите токены с https://faucet.sui.io';
+                            errorMessage = 'Недостаточно SUI для оплаты газа (~0.05 SUI). Получите токены с https://faucet.sui.io';
                         } else if (errorMessage.includes('UserRejected')) {
                             errorMessage = 'Транзакция отклонена пользователем';
                         }
@@ -325,7 +352,8 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                     <strong>⚠️ Требования:</strong>
                                 </p>
                                 <ul style={{ margin: '5px 0', paddingLeft: '20px', color: '#856404' }}>
-                                    <li>У вас должно быть достаточно SUI для оплаты газа (~0.01 SUI)</li>
+                                    <li>У вас должно быть достаточно SUI для оплаты газа (~0.05 SUI)</li>
+                                    {userBalance && <li style={{ color: userBalance.includes('0.0000') ? '#dc3545' : '#28a745' }}>Текущий баланс: {userBalance}</li>}
                                     <li>Кошелек должен быть подключен к Sui testnet</li>
                                     <li>Контракт должен быть предварительно скомпилирован</li>
                                 </ul>
