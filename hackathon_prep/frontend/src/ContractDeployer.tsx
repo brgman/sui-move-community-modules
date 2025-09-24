@@ -324,9 +324,29 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             border: '1px solid #bbdefb',
                             textAlign: 'center'
                         }}>
-                            <p style={{ margin: 0, fontSize: '14px', color: '#1976d2' }}>
+                            <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#1976d2' }}>
                                 {deployStatus}
                             </p>
+                            {lastTransactionDigest && (
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                                    <a
+                                        href={`https://suiscan.xyz/testnet/tx/${lastTransactionDigest}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            padding: '6px 12px',
+                                            fontSize: '12px',
+                                            backgroundColor: '#007bff',
+                                            color: 'white',
+                                            textDecoration: 'none',
+                                            borderRadius: '4px',
+                                            display: 'inline-block'
+                                        }}
+                                    >
+                                        🔍 Проверить статус
+                                    </a>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -520,13 +540,18 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             margin: '10px 0',
                             border: '1px solid #28a745'
                         }}>
-                            <p style={{ margin: 0, fontSize: '14px', color: '#155724' }}>
+                            <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#155724' }}>
                                 {deployStatus}
                             </p>
+                            {lastTransactionDigest && (
+                                <p style={{ margin: 0, fontSize: '12px', color: '#6c757d' }}>
+                                    Transaction: {lastTransactionDigest}
+                                </p>
+                            )}
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                         <button
                             onClick={clearPackageId}
                             style={{
@@ -541,6 +566,25 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         >
                             🔄 Изменить Package ID
                         </button>
+
+                        {lastTransactionDigest && (
+                            <a
+                                href={`https://suiscan.xyz/testnet/tx/${lastTransactionDigest}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    padding: '8px 16px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#17a2b8',
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    borderRadius: '4px',
+                                    display: 'inline-block'
+                                }}
+                            >
+                                🔍 Статус деплоя
+                            </a>
+                        )}
                     </div>
                     <p style={{ color: '#155724', margin: '15px 0 0 0', fontWeight: 'bold' }}>
                         🎉 Контракт готов! Теперь можете создавать GameNFT!
