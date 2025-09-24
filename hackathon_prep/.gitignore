@@ -1,0 +1,19 @@
+# Файлы для игнорирования
+node_modules/
+.env
+.env.local
+*.log
+build/
+dist/
+
+# Приватные ключи и секреты
+private-key.txt
+secrets/
+
+# IDE файлы
+.vscode/
+.idea/
+
+# OS файлы
+.DS_Store
+Thumbs.db

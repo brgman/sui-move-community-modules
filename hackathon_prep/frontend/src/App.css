@@ -1,0 +1,85 @@
+@import '@mysten/dapp-kit/dist/index.css';
+
+/* Основные стили */
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    background-color: #f5f5f5;
+}
+
+/* Стили для кнопок кошелька */
+.wallet-info {
+    text-align: center;
+}
+
+.nft-minter {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.nft-minter h3 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.nft-minter label {
+    display: block;
+    font-weight: 600;
+    color: #555;
+}
+
+.nft-minter input,
+.nft-minter textarea,
+.nft-minter select {
+    border: 2px solid #e1e5e9;
+    border-radius: 6px;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.nft-minter input:focus,
+.nft-minter textarea:focus,
+.nft-minter select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .nft-minter div[style*="grid"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .nft-minter input,
+    .nft-minter textarea,
+    .nft-minter select {
+        font-size: 16px; /* Предотвращает зум на iOS */
+    }
+}
+
+/* Анимации */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Кастомные стили для Sui Wallet кнопок */
+[data-testid="connect-button"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+[data-testid="connect-button"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+}

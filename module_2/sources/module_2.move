@@ -12,7 +12,7 @@ const HERO_PRICE: u64 = 1000000000; // 1 SUI en MIST
 // Structure pour stoquer les paiements
 public struct Vault has key {
     id: UID,
-    owner: any,
+    owner: OWNER,
     balance: Balance<SUI>,
 }
 
