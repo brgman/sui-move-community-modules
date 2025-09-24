@@ -45,7 +45,7 @@ export class NFTManager {
         await this.init();
 
         console.log('🎨 Создание нового GameNFT...');
-        
+
         // Проверяем корректность rarity
         if (params.rarity < 1 || params.rarity > 4) {
             throw new Error('Rarity должна быть от 1 до 4');
@@ -130,13 +130,13 @@ export class NFTManager {
     // Получить все NFT принадлежащие кошельку
     async getMyNFTs() {
         await this.init();
-        
+
         console.log('🔍 Поиск ваших NFT...');
-        
+
         const objects = await walletConfig.getOwnedObjects();
-        
+
         // Фильтруем только GameNFT объекты
-        const nfts = objects.filter(obj => 
+        const nfts = objects.filter(obj =>
             obj.data?.type?.includes('::basic_nft::GameNFT')
         );
 
@@ -148,11 +148,11 @@ export class NFTManager {
 // Пример использования
 async function example() {
     const nftManager = new NFTManager();
-    
+
     try {
         // Проверяем баланс
         await nftManager.checkBalance();
-        
+
         // Создаем новый NFT
         const mintResult = await nftManager.mintGameNFT({
             name: 'Legendary Dragon',
@@ -162,12 +162,12 @@ async function example() {
             power: 100,
             rarity: 4 // Legendary
         });
-        
+
         // Получаем список наших NFT
         await nftManager.getMyNFTs();
-        
+
         console.log('🎉 Пример выполнен успешно!');
-        
+
     } catch (error) {
         console.error('❌ Ошибка в примере:', error);
     }

@@ -49,11 +49,12 @@ body {
     .nft-minter div[style*="grid"] {
         grid-template-columns: 1fr !important;
     }
-    
+
     .nft-minter input,
     .nft-minter textarea,
     .nft-minter select {
-        font-size: 16px; /* Предотвращает зум на iOS */
+        font-size: 16px;
+        /* Предотвращает зум на iOS */
     }
 }
 

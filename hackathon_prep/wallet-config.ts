@@ -6,10 +6,10 @@ import { Buffer } from 'buffer';
 export class WalletConfig {
     private client: SuiClient;
     private keypair: Ed25519Keypair | null = null;
-    
+
     // Ваш текущий адрес кошелька из CLI
     public readonly walletAddress = '0x65a43d0738e914421957f18588ed50c7cca775ee240848854a0ca446843ccafa';
-    
+
     constructor(network: 'devnet' | 'testnet' | 'mainnet' = 'testnet') {
         this.client = new SuiClient({
             url: getFullnodeUrl(network)
@@ -20,16 +20,16 @@ export class WalletConfig {
     importWalletFromSuiPrivateKey(privateKeyBech32: string) {
         try {
             this.keypair = Ed25519Keypair.fromSecretKey(privateKeyBech32);
-            
+
             const address = this.keypair.toSuiAddress();
             console.log('Imported wallet address:', address);
-            
+
             if (address !== this.walletAddress) {
                 console.warn('Warning: Imported address does not match expected address');
                 console.warn(`Expected: ${this.walletAddress}`);
                 console.warn(`Got: ${address}`);
             }
-            
+
             return address;
         } catch (error) {
             console.error('Failed to import wallet:', error);
@@ -42,14 +42,14 @@ export class WalletConfig {
         try {
             const privateKeyBytes = Buffer.from(privateKeyBase64, 'base64');
             this.keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-            
+
             const address = this.keypair.toSuiAddress();
             console.log('Imported wallet address:', address);
-            
+
             if (address !== this.walletAddress) {
                 console.warn('Warning: Imported address does not match expected address');
             }
-            
+
             return address;
         } catch (error) {
             console.error('Failed to import wallet:', error);
