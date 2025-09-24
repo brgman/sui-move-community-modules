@@ -12,6 +12,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
     const [isDeploying, setIsDeploying] = useState(false);
     const [showDeployOption, setShowDeployOption] = useState(false);
     const [deployStatus, setDeployStatus] = useState<string>('');
+    const [lastTransactionDigest, setLastTransactionDigest] = useState<string>('');
 
     const validateAndSetPackageId = () => {
         if (!packageIdInput.trim()) {
@@ -36,7 +37,28 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         setDeployedPackageId('');
         setPackageIdInput('');
         setDeployStatus('');
+        setLastTransactionDigest('');
         onPackageDeployed?.('');
+    };
+
+    // Функция для повторного извлечения Package ID из известной транзакции
+    const retryExtractPackageId = async () => {
+        if (!lastTransactionDigest) return;
+        
+        setIsDeploying(true);
+        const packageId = await extractPackageIdFromTransaction(lastTransactionDigest);
+        
+        if (packageId) {
+            setDeployedPackageId(packageId);
+            setPackageIdInput(packageId);
+            onPackageDeployed?.(packageId);
+            setDeployStatus(`✅ Package ID успешно извлечен: ${packageId}`);
+            setError('');
+        } else {
+            setError('❌ Все еще не удается извлечь Package ID. Попробуйте ввести его вручную.');
+        }
+        
+        setIsDeploying(false);
     };
 
     // Функция для автоматического извлечения Package ID из транзакции
@@ -44,35 +66,63 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         try {
             setDeployStatus('🔍 Извлекаем Package ID из транзакции...');
             
+            // Добавляем небольшую задержку для обеспечения финализации транзакции
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             // Получаем детали транзакции
             const txDetails = await suiClient.getTransactionBlock({
                 digest: digest,
                 options: {
                     showObjectChanges: true,
                     showEffects: true,
+                    showEvents: true,
                 }
             });
 
             console.log('📋 Детали транзакции:', txDetails);
 
-            // Ищем Package ID в objectChanges
+            // Способ 1: Ищем Package ID в objectChanges
             if (txDetails.objectChanges) {
                 for (const change of txDetails.objectChanges) {
                     if (change.type === 'published') {
                         const packageId = change.packageId;
-                        console.log('✅ Найден Package ID:', packageId);
+                        console.log('✅ Найден Package ID в objectChanges:', packageId);
                         return packageId;
                     }
                 }
             }
 
-            // Если не нашли в objectChanges, ищем в effects
+            // Способ 2: Ищем в effects.created
             if (txDetails.effects && txDetails.effects.created) {
                 for (const created of txDetails.effects.created) {
                     if (created.owner === 'Immutable') {
                         const packageId = created.reference.objectId;
-                        console.log('✅ Найден Package ID в effects:', packageId);
+                        console.log('✅ Найден Package ID в effects.created:', packageId);
                         return packageId;
+                    }
+                }
+            }
+
+            // Способ 3: Ищем в событиях публикации
+            if (txDetails.events) {
+                for (const event of txDetails.events) {
+                    if (event.type.includes('::package::PublishedEvent')) {
+                        const packageId = (event.parsedJson as any)?.package_id;
+                        if (packageId) {
+                            console.log('✅ Найден Package ID в events:', packageId);
+                            return packageId;
+                        }
+                    }
+                }
+            }
+
+            // Способ 4: Попробуем найти любой immutable object
+            if (txDetails.effects && txDetails.effects.created) {
+                for (const created of txDetails.effects.created) {
+                    const objectId = created.reference.objectId;
+                    if (objectId && objectId.startsWith('0x') && objectId.length === 66) {
+                        console.log('✅ Найден потенциальный Package ID:', objectId);
+                        return objectId;
                     }
                 }
             }
@@ -144,6 +194,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         
                         if (result.digest) {
                             console.log('📋 Transaction Digest:', result.digest);
+                            setLastTransactionDigest(result.digest);
                             setDeployStatus('🎉 Деплой завершен! Получаем Package ID...');
                             
                             // Автоматически извлекаем Package ID
@@ -369,6 +420,48 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             border: '1px solid #f8bbd9'
                         }}>
                             <p style={{ margin: 0 }}>❌ {error}</p>
+                            
+                            {lastTransactionDigest && (
+                                <div style={{ marginTop: '15px' }}>
+                                    <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
+                                        <strong>Transaction Digest:</strong> {lastTransactionDigest}
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <button
+                                            onClick={retryExtractPackageId}
+                                            disabled={isDeploying}
+                                            style={{
+                                                padding: '8px 16px',
+                                                fontSize: '14px',
+                                                backgroundColor: isDeploying ? '#6c757d' : '#007bff',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: isDeploying ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            {isDeploying ? '🔄 Извлекаем...' : '🔄 Повторить извлечение Package ID'}
+                                        </button>
+                                        
+                                        <a
+                                            href={`https://suiscan.xyz/testnet/tx/${lastTransactionDigest}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                padding: '8px 16px',
+                                                fontSize: '14px',
+                                                backgroundColor: '#28a745',
+                                                color: 'white',
+                                                textDecoration: 'none',
+                                                borderRadius: '4px',
+                                                display: 'inline-block'
+                                            }}
+                                        >
+                                            🔍 Открыть в Explorer
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
