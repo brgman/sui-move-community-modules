@@ -48,12 +48,6 @@ export const WalletInfo: React.FC = () => {
                             <li>Получите тестовые токены на <a href="https://faucet.sui.io" target="_blank" rel="noopener">faucet.sui.io</a></li>
                             <li>Нажмите кнопку "Connect Wallet" выше</li>
                         </ol>
-                        <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#d1ecf1', borderRadius: '4px' }}>
-                            <small>
-                                💡 <strong>Всё управление через браузерный кошелек!</strong><br />
-                                Никаких CLI команд, номеров кошельков или моков - только ваш реальный кошелек.
-                            </small>
-                        </div>
                     </div>
                 </div>
             ) : (

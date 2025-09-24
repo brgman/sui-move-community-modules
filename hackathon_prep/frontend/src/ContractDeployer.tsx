@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 
 export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string) => void }> = ({ onPackageDeployed }) => {
     const currentAccount = useCurrentAccount();
     const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+    const suiClient = useSuiClient();
     const [packageIdInput, setPackageIdInput] = useState<string>('');
     const [deployedPackageId, setDeployedPackageId] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [isDeploying, setIsDeploying] = useState(false);
     const [showDeployOption, setShowDeployOption] = useState(false);
+    const [deployStatus, setDeployStatus] = useState<string>('');
 
     const validateAndSetPackageId = () => {
         if (!packageIdInput.trim()) {
@@ -17,24 +19,71 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
             return;
         }
 
-        // Простая валидация формата Package ID (начинается с 0x и имеет правильную длину)
         const trimmedId = packageIdInput.trim();
         if (!trimmedId.startsWith('0x') || trimmedId.length !== 66) {
-            alert('❌ Неверный формат Package ID!\n\nPackage ID должен:\n- Начинаться с 0x\n- Иметь длину 66 символов\n- Содержать только hex символы (0-9, a-f)');
+            alert('❌ Неверный формат Package ID!\\n\\nPackage ID должен:\\n- Начинаться с 0x\\n- Иметь длину 66 символов\\n- Содержать только hex символы (0-9, a-f)');
             return;
         }
 
         setDeployedPackageId(trimmedId);
         onPackageDeployed?.(trimmedId);
         setError('');
-
-        alert(`✅ Package ID установлен!\n\n📦 ${trimmedId}\n\nТеперь можете создавать NFT с этим контрактом!`);
+        
+        console.log('✅ Package ID установлен:', trimmedId);
     };
 
     const clearPackageId = () => {
         setDeployedPackageId('');
         setPackageIdInput('');
+        setDeployStatus('');
         onPackageDeployed?.('');
+    };
+
+    // Функция для автоматического извлечения Package ID из транзакции
+    const extractPackageIdFromTransaction = async (digest: string): Promise<string | null> => {
+        try {
+            setDeployStatus('🔍 Извлекаем Package ID из транзакции...');
+            
+            // Получаем детали транзакции
+            const txDetails = await suiClient.getTransactionBlock({
+                digest: digest,
+                options: {
+                    showObjectChanges: true,
+                    showEffects: true,
+                }
+            });
+
+            console.log('📋 Детали транзакции:', txDetails);
+
+            // Ищем Package ID в objectChanges
+            if (txDetails.objectChanges) {
+                for (const change of txDetails.objectChanges) {
+                    if (change.type === 'published') {
+                        const packageId = change.packageId;
+                        console.log('✅ Найден Package ID:', packageId);
+                        return packageId;
+                    }
+                }
+            }
+
+            // Если не нашли в objectChanges, ищем в effects
+            if (txDetails.effects && txDetails.effects.created) {
+                for (const created of txDetails.effects.created) {
+                    if (created.owner === 'Immutable') {
+                        const packageId = created.reference.objectId;
+                        console.log('✅ Найден Package ID в effects:', packageId);
+                        return packageId;
+                    }
+                }
+            }
+
+            console.log('❌ Package ID не найден в транзакции');
+            return null;
+
+        } catch (error) {
+            console.error('❌ Ошибка извлечения Package ID:', error);
+            return null;
+        }
     };
 
     // Функция для деплоя контракта прямо из браузера
@@ -47,26 +96,27 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         try {
             setIsDeploying(true);
             setError('');
+            setDeployStatus('🚀 Начинаем деплой контракта...');
 
             console.log('🚀 Начинаем деплой контракта из браузера...');
 
             // Получаем скомпилированный байткод
-            // В реальном приложении байткод должен быть предварительно скомпилирован 
-            // и доступен как статический ресурс или через API
             const response = await fetch('/bytecode/basic_nft.mv');
             if (!response.ok) {
-                throw new Error('Не удалось загрузить байткод контракта. Сначала скомпилируйте контракт: sui move build');
+                throw new Error('Не удалось загрузить байткод контракта. Убедитесь что файл /bytecode/basic_nft.mv доступен.');
             }
-
+            
             const bytecodeBuffer = await response.arrayBuffer();
             const bytecode = Array.from(new Uint8Array(bytecodeBuffer));
 
+            setDeployStatus('📦 Создаем транзакцию деплоя...');
+
             // Создаем транзакцию для публикации
             const tx = new Transaction();
-
+            
             // Устанавливаем разумный газ бюджет (0.01 SUI)
             tx.setGasBudget(10000000); // 0.01 SUI
-
+            
             // Публикуем пакет с явными зависимостями для Sui testnet
             const [upgradeCapability] = tx.publish({
                 modules: [bytecode],
@@ -80,6 +130,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
             tx.transferObjects([upgradeCapability], currentAccount.address);
 
             console.log('📦 Отправляем транзакцию деплоя...');
+            setDeployStatus('📝 Подтвердите транзакцию в кошельке...');
 
             // Отправляем транзакцию
             signAndExecuteTransaction(
@@ -88,32 +139,47 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     chain: 'sui:testnet',
                 },
                 {
-                    onSuccess: (result) => {
+                    onSuccess: async (result) => {
                         console.log('✅ Контракт успешно задеплоен из браузера!', result);
-
-                        // Получаем Transaction Digest для поиска в explorer
+                        
                         if (result.digest) {
                             console.log('📋 Transaction Digest:', result.digest);
-
-                            // Показываем пользователю успех и инструкции
-                            const explorerUrl = `https://suiscan.xyz/testnet/tx/${result.digest}`;
-
-                            setError('');
-                            alert(`✅ Контракт успешно задеплоен!\n\n🔍 Transaction Digest: ${result.digest}\n\n� Откройте Sui Explorer для получения Package ID:\n${explorerUrl}\n\n💡 После получения Package ID введите его в поле ниже для взаимодействия с контрактом.`);
-
-                            // Переключаемся обратно на ввод Package ID
-                            setShowDeployOption(false);
+                            setDeployStatus('🎉 Деплой завершен! Получаем Package ID...');
+                            
+                            // Автоматически извлекаем Package ID
+                            const packageId = await extractPackageIdFromTransaction(result.digest);
+                            
+                            if (packageId) {
+                                // Успешно получили Package ID - заполняем интерфейс
+                                setDeployedPackageId(packageId);
+                                setPackageIdInput(packageId);
+                                onPackageDeployed?.(packageId);
+                                setDeployStatus(`✅ Package ID получен и установлен автоматически!`);
+                                setError('');
+                                setShowDeployOption(false);
+                                
+                                console.log('🎯 Package ID автоматически установлен:', packageId);
+                            } else {
+                                // Не удалось автоматически получить Package ID
+                                const explorerUrl = `https://suiscan.xyz/testnet/tx/${result.digest}`;
+                                setError(`⚠️ Контракт задеплоен успешно, но не удалось автоматически извлечь Package ID. Проверьте транзакцию в explorer и введите Package ID вручную: ${explorerUrl}`);
+                                setDeployStatus('⚠️ Требуется ручной ввод Package ID');
+                                setShowDeployOption(false);
+                                
+                                console.log('🔗 Explorer URL:', explorerUrl);
+                            }
                         } else {
                             console.log('📋 Результат деплоя:', result);
                             setError('Контракт задеплоен, но не получен digest транзакции');
+                            setDeployStatus('❌ Нет digest транзакции');
                         }
-
+                        
                         setIsDeploying(false);
                     },
                     onError: (error) => {
                         console.error('❌ Ошибка деплоя:', error);
                         let errorMessage = error.message;
-
+                        
                         if (errorMessage.includes('PublishUpgradeMissingDependency')) {
                             errorMessage = 'Ошибка зависимостей контракта. Попробуйте перезагрузить страницу и повторить деплой.';
                         } else if (errorMessage.includes('InsufficientGas')) {
@@ -121,8 +187,9 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         } else if (errorMessage.includes('UserRejected')) {
                             errorMessage = 'Транзакция отклонена пользователем';
                         }
-
+                        
                         setError(`Ошибка деплоя: ${errorMessage}`);
+                        setDeployStatus('❌ Деплой не удался');
                         setIsDeploying(false);
                     }
                 }
@@ -131,6 +198,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
         } catch (error: any) {
             console.error('❌ Ошибка подготовки деплоя:', error);
             setError(`Ошибка: ${error.message}`);
+            setDeployStatus('❌ Ошибка подготовки');
             setIsDeploying(false);
         }
     };
@@ -146,12 +214,12 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
 
     return (
         <div style={{ padding: '25px', backgroundColor: '#fff', border: '2px solid #007bff', borderRadius: '10px', marginBottom: '20px' }}>
-            <h3 style={{ color: '#007bff', marginBottom: '20px' }}>� Подключение к Smart Contract</h3>
-
+            <h3 style={{ color: '#007bff', marginBottom: '20px' }}>📦 Подключение к Smart Contract</h3>
+            
             {!deployedPackageId ? (
                 <div>
                     <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                        <button
+                        <button 
                             onClick={() => setShowDeployOption(!showDeployOption)}
                             style={{
                                 padding: '12px 24px',
@@ -168,11 +236,27 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                         </button>
                     </div>
 
+                    {/* Отображение статуса деплоя */}
+                    {deployStatus && (
+                        <div style={{ 
+                            marginBottom: '20px', 
+                            padding: '15px', 
+                            backgroundColor: '#e3f2fd', 
+                            borderRadius: '8px', 
+                            border: '1px solid #bbdefb',
+                            textAlign: 'center'
+                        }}>
+                            <p style={{ margin: 0, fontSize: '14px', color: '#1976d2' }}>
+                                {deployStatus}
+                            </p>
+                        </div>
+                    )}
+
                     {showDeployOption ? (
                         <div style={{ marginBottom: '20px', padding: '20px', backgroundColor: '#e8f4fd', borderRadius: '8px', border: '2px solid #007bff' }}>
                             <h4 style={{ color: '#007bff', marginTop: 0 }}>🚀 Деплой контракта через браузер</h4>
                             <p>Задеплойте basic_nft контракт прямо из браузера используя ваш подключенный кошелек.</p>
-
+                            
                             <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#d1ecf1', borderRadius: '6px', border: '1px solid #bee5eb' }}>
                                 <p style={{ margin: 0, fontSize: '14px', color: '#0c5460' }}>
                                     <strong>ℹ️ Как это работает:</strong>
@@ -180,9 +264,8 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 <ol style={{ margin: '5px 0', paddingLeft: '20px', color: '#0c5460' }}>
                                     <li>Нажмите кнопку "Задеплоить контракт"</li>
                                     <li>Подтвердите транзакцию в кошельке</li>
-                                    <li>После успешного деплоя откройте ссылку в Sui Explorer</li>
-                                    <li>Найдите Package ID в деталях транзакции</li>
-                                    <li>Скопируйте Package ID и введите его в форму ниже</li>
+                                    <li>Package ID будет автоматически получен и установлен</li>
+                                    <li>Можете сразу начать создавать NFT!</li>
                                 </ol>
                             </div>
 
@@ -197,7 +280,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 </ul>
                             </div>
 
-                            <button
+                            <button 
                                 onClick={deployContractFromBrowser}
                                 disabled={isDeploying}
                                 style={{
@@ -219,18 +302,10 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     ) : (
                         <div>
                             <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #bbdefb' }}>
-                                <h4 style={{ color: '#1976d2', marginTop: 0 }}>🎯 Как получить Package ID:</h4>
-                                <ol style={{ textAlign: 'left', margin: '10px 0', color: '#424242' }}>
-                                    <li><strong>Скомпилируйте контракт:</strong> <code>sui move build</code></li>
-                                    <li><strong>Разверните контракт:</strong> <code>sui client publish</code></li>
-                                    <li><strong>Скопируйте Package ID</strong> из вывода команды</li>
-                                    <li><strong>Вставьте его</strong> в поле ниже</li>
-                                </ol>
-                                <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#fff3cd', borderRadius: '6px', border: '1px solid #ffeeba' }}>
-                                    <p style={{ margin: 0, fontSize: '14px', color: '#856404' }}>
-                                        <strong>💡 Для тестирования:</strong> Вы можете использовать любой существующий Package ID из Sui Explorer, чтобы протестировать интерфейс.
-                                    </p>
-                                </div>
+                                <h4 style={{ color: '#1976d2', marginTop: 0 }}>🎯 Ввод существующего Package ID:</h4>
+                                <p style={{ margin: '10px 0', color: '#424242' }}>
+                                    Если у вас уже есть задеплоенный контракт, введите его Package ID ниже.
+                                </p>
                             </div>
 
                             <div style={{ marginBottom: '20px' }}>
@@ -257,14 +332,8 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                 </div>
                             </div>
 
-                            {error && (
-                                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#ffebee', borderRadius: '8px', border: '1px solid #f8bbd9' }}>
-                                    <p style={{ color: '#c62828', margin: 0 }}><strong>❌ Ошибка:</strong> {error}</p>
-                                </div>
-                            )}
-
                             <div style={{ display: 'flex', gap: '10px' }}>
-                                <button
+                                <button 
                                     onClick={validateAndSetPackageId}
                                     disabled={!packageIdInput.trim()}
                                     style={{
@@ -283,10 +352,23 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                                     ✅ Подключить контракт
                                 </button>
                             </div>
-
+                            
                             <div style={{ marginTop: '15px', fontSize: '14px', color: '#6c757d' }}>
                                 <p>💡 Введите реальный Package ID развернутого basic_nft контракта</p>
                             </div>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div style={{ 
+                            backgroundColor: '#ffebee', 
+                            color: '#c62828', 
+                            padding: '15px', 
+                            borderRadius: '8px',
+                            margin: '20px 0',
+                            border: '1px solid #f8bbd9'
+                        }}>
+                            <p style={{ margin: 0 }}>❌ {error}</p>
                         </div>
                     )}
                 </div>
@@ -295,7 +377,7 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                     <h4 style={{ color: '#155724', marginTop: 0 }}>✅ Контракт подключен!</h4>
                     <div style={{ marginBottom: '15px' }}>
                         <strong>📦 Package ID:</strong>
-                        <code style={{
+                        <code style={{ 
                             display: 'block',
                             backgroundColor: '#fff',
                             padding: '12px',
@@ -308,8 +390,23 @@ export const ContractDeployer: React.FC<{ onPackageDeployed?: (packageId: string
                             color: '#155724'
                         }}>{deployedPackageId}</code>
                     </div>
+                    
+                    {deployStatus && (
+                        <div style={{ 
+                            backgroundColor: '#fff', 
+                            padding: '10px', 
+                            borderRadius: '6px',
+                            margin: '10px 0',
+                            border: '1px solid #28a745'
+                        }}>
+                            <p style={{ margin: 0, fontSize: '14px', color: '#155724' }}>
+                                {deployStatus}
+                            </p>
+                        </div>
+                    )}
+                    
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
+                        <button 
                             onClick={clearPackageId}
                             style={{
                                 padding: '8px 16px',
