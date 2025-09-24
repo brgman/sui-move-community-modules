@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SuiClientProvider, WalletProvider, createNetworkConfig } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -15,6 +15,13 @@ const { networkConfig } = createNetworkConfig({
 const queryClient = new QueryClient();
 
 function App() {
+    const [deployedPackageId, setDeployedPackageId] = useState<string>('');
+
+    const handlePackageDeployed = (packageId: string) => {
+        setDeployedPackageId(packageId);
+        console.log('📦 Package ID получен в App:', packageId);
+    };
+
     return (
         <QueryClientProvider client={queryClient}>
             <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
@@ -50,7 +57,7 @@ function App() {
                                 borderRadius: '8px',
                                 marginBottom: '30px'
                             }}>
-                                <ContractDeployer />
+                                <ContractDeployer onPackageDeployed={handlePackageDeployed} />
                             </section>
 
                             <section style={{
@@ -59,7 +66,7 @@ function App() {
                                 border: '2px solid #e9ecef',
                                 borderRadius: '8px'
                             }}>
-                                <NFTMinter />
+                                <NFTMinter packageId={deployedPackageId} />
                             </section>
                         </main>
 

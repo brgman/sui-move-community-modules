@@ -90,8 +90,8 @@ export const WalletInfo: React.FC = () => {
     );
 };
 
-// Компонент для создания NFT через браузерный кошелек
-export const NFTMinter: React.FC = () => {
+// Компонент для создания GameNFT
+export const NFTMinter: React.FC<{ packageId?: string }> = ({ packageId }) => {
     const currentAccount = useCurrentAccount();
     const { mutate: signAndExecute } = useSignAndExecuteTransaction();
     const [loading, setLoading] = useState(false);
@@ -112,13 +112,12 @@ export const NFTMinter: React.FC = () => {
             return;
         }
 
-        // ВАЖНО: Замените на ваш реальный PACKAGE_ID после деплоя!
-        // Получите Package ID развернув модуль через браузерный кошелек
-        const PACKAGE_ID = 'YOUR_PACKAGE_ID_HERE';
+        // Используем реальный PACKAGE_ID переданный от ContractDeployer
+        const PACKAGE_ID = packageId;
 
-        // Проверка что модуль развернут
-        if (PACKAGE_ID === 'YOUR_PACKAGE_ID_HERE') {
-            alert(`❌ Модуль не развернут!\n\nДля работы нужно:\n\n1. Подключить браузерный кошелек Sui Wallet\n2. Получить SUI токены на faucet.sui.io  \n3. Развернуть модуль через браузерный интерфейс или CLI\n4. Обновить PACKAGE_ID в коде\n\nВсё управление только через ваш браузерный кошелек!`);
+        // Проверка что Package ID установлен
+        if (!packageId) {
+            alert(`❌ Package ID не установлен!\n\nДля создания NFT нужно:\n\n1. Подключить браузерный кошелек Sui Wallet\n2. Развернуть basic_nft контракт через CLI\n3. Ввести реальный Package ID в секции выше\n\nБез реального Package ID создание NFT невозможно!`);
             return;
         }
 
@@ -206,6 +205,34 @@ export const NFTMinter: React.FC = () => {
     return (
         <div className="nft-minter">
             <h3>🎨 Создать Game NFT</h3>
+
+            {/* Индикатор Package ID */}
+            <div style={{
+                marginBottom: '20px',
+                padding: '15px',
+                backgroundColor: packageId ? '#d4edda' : '#fff3cd',
+                borderRadius: '8px',
+                border: `1px solid ${packageId ? '#c3e6cb' : '#ffeeba'}`
+            }}>
+                <strong>📦 Package ID:</strong>
+                {packageId ? (
+                    <code style={{
+                        display: 'block',
+                        backgroundColor: '#fff',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        wordBreak: 'break-all',
+                        margin: '8px 0 0 0',
+                        color: '#155724'
+                    }}>{packageId}</code>
+                ) : (
+                    <span style={{ color: '#856404', marginLeft: '8px' }}>
+                        ⏳ Сначала разверните контракт выше
+                    </span>
+                )}
+            </div>
 
             <div style={{ marginBottom: '20px' }}>
                 <label>
